@@ -1,0 +1,645 @@
+﻿\documentclass[journal]{IEEEtran}
+
+% \usepackage[utf8]{inputenc}
+\usepackage[switch]{lineno} % 里面的选项代表双栏
+% \usepackage{graphicx} % 可加入图片
+\usepackage[colorlinks=true,linkcolor=red,anchorcolor=blue,citecolor=green]{hyperref}
+% \usepackage{setspace}
+\usepackage{amsmath}    % 数学公式
+\usepackage{cite}
+\usepackage{multirow}   % 表格
+\usepackage[pdftex]{graphicx}
+\usepackage{subfigure}
+\begin{document}
+
+\bibliographystyle{ieeetr}
+
+\title{Project-and-Fuse: Improving RGB-D Semantic Segmentation via Graph Convolution Networks}
+
+\author{Bohan Wang,~\IEEEmembership{Member,~IEEE,}
+        John~Doe,~\IEEEmembership{Fellow,~OSA,}
+        and~Jane~Doe,~\IEEEmembership{Life~Fellow,~IEEE}% <-this % stops a space
+\thanks{M. Shell was with the Department
+of Electrical and Computer Engineering, Georgia Institute of Technology, Atlanta,
+GA, 30332 USA e-mail: (see http://www.michaelshell.org/contact.html).}% <-this % stops a space
+\thanks{J. Doe and J. Doe are with Anonymous University.}% <-this % stops a space
+\thanks{Manuscript received April 19, 2005; revised August 26, 2015.}}
+
+% The paper headers
+\markboth{Journal of \LaTeX\ Class Files,~Vol.~14, No.~8, August~2015}%
+{Shell \MakeLowercase{\textit{et al.}}: Bare Demo of IEEE. for IEEE Journals}
+
+\maketitle
+
+\begin{abstract}
+    Most existing RGB-D semantic segmentation focus on the feature level fusion, designing complex cross-modality and cross-scale fusion module to extract features. However, these methods may cause misalignment problem in the feature fusion process and there still exists counter-intuitive patches in the segmentation results, especially when it comes to the indoor scenarios due to the complex layouts and poor lightenings. Inspired by the previous pixel-node-pixel pipeline, this paper propose to deploy Graph Neural Networks on the preliminary segmented results to alleviate the emergence of irregular patches. 
+    
+    Specifically, at the graph construction process, we argue that locality information are equally important compared to semantics. so we connect regions that are close to each other in the Euclidean space as well as in the semantic space with larger edge weights. At the 3D feature extraction process, we argue that traditional CNNs are not as efficient as it is on RGB images when it comes to depth maps, so we encode the depth map to the normal map, after which CNNs can easily extract object surface tendencies. At the feature fusion stage, we seamlessly inject the 3D branch into the original pipeline in a late fusion style, during which the geometric feature injection is guided by texture feature prior. 
+
+    Extensive experiments on two public dataset, NYU-DepthV2 and SUN RGB-D, have shown that our approach can consistently boost the performance of RGB-D semantic segmentation task.
+    \end{abstract}
+
+\begin{IEEEkeywords}
+    RGB-D; Semantic Segmentation; GCN
+    \end{IEEEkeywords}
+
+
+\section{Introduction} \label{sec_introduction}
+ 
+    Semantic segmentation refers to the pixel-wise classification of images according to semantic information, it plays an important role in scene understanding, medical image analysis, robot perception, etc\cite{mo2022review}. It is well-known that classic Convolutional Neural Networks \cite{krizhevsky2017alexnet} have excelled at capturing local texture features compared with traditional methods. But considering that the patch from one corner may be related to the patch from another corner, it is necessary for CNNs to have larger receptive field which enables it to capture the long-range dependencies. To enable the CNNs to recognize patterns in a larger scale, the previous solutions are to design various convolutional architectures \cite{wei2018dilated} or concatenate multiple kernels \cite{simonyan2014vgg} to have larger receptive field; later, the attention-based methods \cite{hu2018seNet} \cite{wang2018nonLocal} introduce the attention score to capture dependencies and fusion-based methods \cite{yuan2020OCrep} \cite{li2020gatedfuse} propose to fuse features at different stages so as to aggregate multi-scale semantics; more recently, transformers-based methods \cite{carion2020DETR}\cite{dosovitskiy2020ViT} have excelled at various computer vision tasks. However, most of these method always come with the massive number of parameters, and how to precisely extract multi-scale semantic dependencies in a more effective as well as explainable way remains to be further studied. 
+    
+    Indoor semantic segmentation is one of the most challenging problems due to the complex layouts and various occlusions\cite{wang2021brief}. The popularity of depth sensors in recent years has made it easy to capture depth map along with the RGB-D images, which further boosted the researches relevant to multi-modal fusion. It is well known that there are three popular pipelines to fuse RGB-D and depth data based-on when the fusion happens. Early fusion is also known as input-level fusion, it refers to combine two modalities before any feature extraction operations. Middle fusion is also called as feature-level fusion, meaning that features from different modalities are aggregated during the feature learning stage, which have been studied in various approaches. Late fusion is also named as decision-level fusion, referring to the fusion happened after feature extraction. 
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.4\textwidth]{pics/counter-intuitive.png}
+    \caption{The counter-intuitive cases. Existing segmentation results exist scenes that are against human's commonsense. The first row shows that there exist toilet(white) next to the window(purple), and the second row shows there exist emerge a small patch of ceiling in the middle of shelves. }
+    \label{fig_counter_intuitive}
+\end{figure}
+
+ 
+    Despite various methods proposed in recent years have greatly improved the accuracy of RGB as well as RGB-D semantic segmentation, the results are still not good enough. Specifically, there still exists irregular patches which are unreasonable for human beings and can be easily rectified with a little human's common sense. Fig \ref{fig_counter_intuitive} shows some cases that are very counter-intuitive for a reasonable human being, but for the neural networks, it is hard to distinguish the relations between different classes.
+
+ 
+    It is worth noting that there are some works have tried to solve this problem. \cite{liu2021exploit} performed intra-class and inter-class reasoning to exploit dependency relations among visual entities. To achieve a holistic understanding of an image, \cite{wu2020bidirectional} incorporates graph structure into the conventional segmentation networks and explicitly model the correlations between object and background. Similarly, researchers in other computer vision tasks noticed the importance of relations between entities, \cite{zhou2021relation} tried to learn the relations via graph reasoning on a knowledge graph for the object detection. \cite{wang2020region} explores the relationship between regions rather than pixels considering that regions have richer semantics than pixels. 
+    
+\begin{figure}
+    \centering
+    \includegraphics[width=0.45\textwidth]{pics/pipelines.png}
+    \caption{(a): The popular pixel-graph-pixel networks pipeline, which is mainly composed of 4 process:  feature extracting and representation learning as most backbones did; graph construction based on the learned feature maps, graph representation updating via various graph neural networks; graph re-projection to transform graph back to the feature map. (b): the proposed fusion pipeline. We encode the depth map so that 3D features can be better captured by CNNs and seamlessly apply the original pipeline to modal fusion that complementary information can be aggregated.}
+    \label{fig_pipeline}
+\end{figure}
+
+ 
+    We extract commonalities among the previous graph-based reasoning networks and summarize them into a pipeline, which can be seen in fig \ref{fig_pipeline} (a). To solve the counter-intuitive errors in RGB-D indoor semantic segmentation tasks, as fig \ref{fig_pipeline} (b) shows, we seamlessly inject the 3D branch into this pipeline and fuse two modalities in a texture-prior style. In practice, we found that the assignment are not effective and positional properties are completely ignored during the graph construction process, during which may lose valuable semantic and positional features and further hurt the final results. Therefore, we add two constraints on the projection matrix and changed the way how adjacent matrix is generated. Experiments shows the effectiveness of these modifications. \\   
+    
+     
+    The main contributions are summarized as follows: 
+
+    1. To effectively solve the "irregular patch" errors in RGB-D semantic segmentation, we propose to upgrade the existing pixel-node-pixel pipeline with the addition of a 3D branch, during which features from two modalities are fused in a texture-prior style.
+    
+    2. To alleviate the Biased-Assignment and Ambiguous-Locality problem in graph construction process, we add constraints on the projection matrix and changed the way how adjacent matrix is generated.
+
+    3. Extensive experiments on NYU-v2 and SUN RGB-D shows that the proposed method have competitive performance compared to current methods. 
+
+\section{Related Works} \label{sec_related}
+
+\subsection{2D Semantic Segmentation}
+
+ 
+    For 2D Semantic segmentation, the traditional way is to use random forest and conditional random field (CRF) to segment masks. The deep learning-based methods \cite{long2015fully} has started a new era of segmentation models, and the encoder-decoder architecture has become the mainstream solution in semantic segmentation tasks\cite{unet}. DeepLab series\cite{chen2017deeplab}\cite{cheng2020panoptic} introduce Dilated Convolution and Atrous Spatial Pyramid Pooling Module to equip the network with larger receptive field, which enables the network to fuse multi-scale features and no longer limited by the size of the input image. 
+    
+ 
+    Meanwhile, the combination of Computer Vision and Attention mechanism has also make networks learn long-range dependencies and improved the performance on semantic segmentation tasks. \cite{NonLocal2018} computes the response at a position as a weighted sum of the features at all positions to connect different positions. Instead of capturing contexts by multi-scale features fusion, \cite{fu2019dual} propose a Dual Attention Networks (DANet) to adaptively integrate local features with their global dependencies. \cite{huang2018ccnet} propose a Criss-Cross Network (CCNet) to obtain full-image contextual information in a very effective and efficient way.
+    
+ 
+    In summary, on one hand, there exists delicate balance between global feature and local feature selection when determining the class to which a pixel belongs. On the other hand, as the network goes deeper, the increasing computational complexity made it difficult to be deployed in practical industrial applications.
+    
+\subsection{3D Semantic Segmentation}
+ 
+    As the acquisition of 3D sensors become easier, researches on RGB-D semantic segmentation\cite{wang2021brief} lead to the question that how to integrate data from different modalities.  It is generally accepted that CNNs designed for RGB images and depth maps should be different from each other due to the variations between two modalities. 
+
+    
+ 
+    Many methods take RGB-D semantic segmentation as a fusion task, and based on the time when fusion happened, it can be categorized as early-fusion, middle-fusion, late-fusion and hybrid fusion\cite{zhang2021deep}. Early-fusion is also called "input-level" fusion, \cite{cao2021rgbxd} multiply RGB data with a depth-relevant weight matrix before feeding it into the network.  \cite{2016fusenet} is a simple example of incorporating  depth feature into an encoder-decoder segmentation framework. \cite{park2017rdfnet} feed RGB and Depth data into two parallel CNN streams and fuse the feature map via multi-modal feature fusion blocks and multi-level feature refinement blocks. \cite{cheng2017locality} propose e to adaptively merge RGB and depth according to their weighted contributions at the decision-level. \cite{2020deep} utilize the magnitude of Batch-Normalization (BN) scaling factor to exchange "more useful" features. Although these fusion-based methods achieved competitive segmentation results, there still exists two main problems: the interpretability of the fusion process and the misalignment issue. On one hand, these well designed fusion modules are usually based upon two parallel CNN streams and complex fusion mechanism usually lead to poor interpretability. On the other hand, as \cite{2021global} describes, when the network goes deeper, the size of feature map decreases and the semantics becomes more abstract, and a simple element-wise addition or concatenation in the feature extracting process may not only cannot fully utilize the complementary information, but also result in misalignment issue.
+ 
+    It is commonly acknowledged that RGB images have rich photometric features while depth maps only depict the distances from object surfaces to the camera which are relatively texture-less. We argue that depth maps have two kind of valuable information: the edges, indicating there is a gap between neighboring pixels; the tendencies, depicting the 3D surface features. There are also many methods design geometric-aware convolution kernels to jointly process RGB and depth data and alleviate the gap between two modalities. \cite{2018depthaware} seamlessly incorporate geometry into CNN via a depth-aware convolution and a depth-aware average pooling, during which introduced no additional parameters. \cite{2020malleable} propose a operator called malleable 2.5D convolution to learn the receptive field along the depth-axis. \cite{2021shapeconv} considered the shape as a more inherent attribute to the semantics, and introduce Shape-aware Convolutional layer to process the depth feature. Theoretically innovative as these methods are, they cannot cover all the complex indoor layouts, which lead to dissatisfied results. 
+
+    More recently, methods that taking RGB-D semantic segmentation as a distillation task or introducing transformer modules have also achieved competitive results. \cite{jiao2019geometrydistillation} propose to  jointly infer two modalities information by distilling geometry-aware embedding and use the learned embedding to improve segmentation result. \cite{liu2021distillation} distill 3D knowledge from a pre-trained 3D network to supervise a 2D network and calibrate the 2D and 3D features for better integration via a two-stage dimension normalization. \cite{liu2022cmx} calibrate the feature of two modalities in spatial-wise and channel-wise dimensions via a Cross-Modal Feature Rectification Module (CM-FRM), and deploy a Feature Fusion Module (FFM) in a cross-attention style to mix features from different modalities for the final semantic prediction. 
+  
+    To summarize, the difficulties for the RGB-D semantic segmentation task are as follows: 1), the misalignment issues and feature selection bias when middle-fusion happens, which may introduce unnecessary trouble; 2), the trade-off between better results and larger network parameters, which is an important consideration when applied to industrial applications.  \\   
+
+\subsection{Graph Neural Networks in Computer Vision}  
+ 
+    The Graph Neural Networks(GNN) are originally used to handle irregular-structured data, such as molecular structure, social networks and etc., to capture structural relations. In recent years, the graph neural networks (GNNs) in the application of computer vision has draw a lot of attention, such as, person recognition\cite{yao2022sparse}, object detection\cite{zhao2021graphfpn}\cite{shi2020point}\cite{zhang2021pc} and etc. 
+ 
+   
+    For RGB-D semantic segmentation, there are methods directly design GNNs to solve the per-pixel classification problem. \cite{qi20173d} introduce a 3D graph neural network (3DGNN) to build a k-nearest neighbor graph on a set of 3D point-cloud which are converted from depth data. Each node dynamically updates its hidden feature based on its own status and messages from its neighbors, and the final per-node representation is used for semantic class predicting of each pixel.  \cite{chen20193dneighbor}introduced a 3D Neighborhood convolutions by modeling the receptive field of the 2D convolution in accordance with the 3D local neighborhood. It is the first concept framework to explicitly cover both the scale and the locality from depth in theory, which learns better 3D-aware features.
+    
+    
+    There are also some methods try to capture abstract semantic relations via Graph Neural Networks \cite{li2018beyondgrids}\cite{liang2018symbolicRG}\cite{chen2019glore}. As Fig \ref{fig_pipeline} (a) shows, the pipeline can be summarized into 3 steps: 1) map the features from coordinate space to hidden interaction space to construct a semantic-aware graph, 2) perform reasoning on the graph and update node features, 3) map the graph back to the coordinate space and get the updated feature map. Most methods differ in the first two steps: how to construct a graph from the feature map and how to perform message passing to update node features. 
+    
+    
+    Specifically, \cite{li2018beyondgrids} generate the nodes based on the similarity between different pixels, known as regions, and the edges of the graph represent the similarity between different regions. To propagate information on the learned graph, the graph convolutional networks is used\cite{kipf2016GCN}, during which the reasoning go beyond the traditional regular grids and captured long-range dependencies among different regions. \cite{liang2018symbolicRG} propose a new Symbolic Graph Reasoning (SGR) layer to perform reasoning over a group of symbolic nodes, aiming to explicitly represent different semantics in a prior knowledge graph.  \cite{chen2019glore} present a lightweight yet highly efficient unit names as Global Reasoning unit, which achieved the coordinate-interaction space mapping via weighted global pooling and weighted broadcasting, and the relation reasoning via graph convolution on a small graph in interaction space. 
+
+    
+    More recently, there are also some inspiring researches worth the notice. \cite{han2022VIG} propose to represent the image via a graph structure and introduce a Vision GNN (ViG) architecture to extract graph-level features for visual tasks. Instead of measuring the semantic consistency as the weight of edges, ViG connect nodes based on the nearness, which conserved the locality of original space. To address the over-smoothing problem and the high-cost at high-level problem, \cite{2022TopoGNNFusion} design a topology of GNNs in a novel feature fusion perspective and propose a neural architecture search method which contains a set of feature selection and fusion operations.
+
+    \begin{figure*}
+        \centering
+        \includegraphics[width=0.95\textwidth]{pics/with_loss_flow.png}
+        \caption{Details of the proposed method. We first encoding the depth map into normal map so that two modalities can be sent into parallel feature extraction branches. Graph construction module takes two feature maps as its input and output the fused graph, through which pixels that have similar semantics and localities are marked as a region and assigned to the same node, and the similarities between two regions are considered to generate the edge weights. After that, graph neural networks are adopted to update node features. Finally, updated node feature are projected back to the feature map. }
+        \label{fig_overview}
+    \end{figure*}
+    
+    In summary, these approaches all point out the importance of semantic correlation between regions and use GNN to extract semantic features, ultimately achieving better feature extraction performance that are beneficial for the downstream tasks. But in practice, there exists two main problems, namely Biased-Assignment and Ambiguous-Locality. On one hand, as training goes, the soft-assignment projection matrix tend to assign some pixels to multiple nodes whereas and other pixels to none nodes, resulting GNNs pay redundant attentions to some region while almost none to others. We call this phenomenon Biased-Assignment issue. On the other hand, these methods measure region connectivity   solely based-on the semantic similarity, but in semantic segmentation task, the location of each pixel do have a decisive impact on the final prediction. 
+
+\section{The proposed method}  \label{sec_method}
+
+
+
+
+\subsection{Overview}  \label{sec_sub_overview}
+ 
+    The overall structure of the proposed network is shown in Fig \ref{fig_overview} and the detailed module design and the loss function will be illustrated in the following sections. It is worth noting that our highlights are mainly at depth encoding module and graph construction module: 1), to better handle the depth map with CNNs, we propose to transform one-channel depth map to three-channel normal map; 2), to efficiently and effectively fuse features from two modalities, the texture-oriented projection matrix and a summation operation are used to seamlessly fuse features from two modalities; 3) to alleviate the Biased-Assignment issue, we add a constraint on the projection matrix; 4), to embed positional information into the graph, we generate adjacent matrix based-on the Euclidean distance at graph construction stage. 
+
+\subsection{Data Pre-Process}  \label{sec_sub_depth_process}
+ 
+    The data pre-process module takes data from two modalities as input and output the initial feature map for the following fusion and processing. This module is composed of two branches: main 2D branch and injected 3D branch, both of which adopt the popular encoder-decoder based segmentation networks, i.e. DeepLabV3+, to get the preliminary feature map. 
+
+     
+    For 3D branch, due to the inherently difference between RGB and depth data, as \cite{2021shapeconv} mentioned, the convolution operator that is widely adopted for RGB data might not be the optimal for the depth map processing. To enable the network to better handle such features and the subsequent fusion operation, we encode the depth map into normal map as the input of 3D branch. Considering the different complexity of the two modalities, the backbone of 3D branch is relatively simpler, i.e., ResNet50 for 2D branch and ResNet18 for 3D branch. Experiments in \ref{sec_sub_ablation_study} shows such settings doesn't hurt the final performance. 
+
+ 
+    In this section, we will describe how to encode the single-channel depth map to the three-channel normal map. As previous method \cite{yin2018geonet} described, with the camera parameters and depth data, we can project the depth map as a set of point cloud and compute the normal vector based on the neighborhood region of the point. The depth encoding process can be seen in Fig \ref{fig_depth_encoding_and_graph_construction}(a).
+ 
+    \subsubsection{Pinhole Camera Model}  In order to project depth map as a set of point cloud, we adopt the pinhole camera model. For the pixel $(u_{i},v_{i})$ in the depth map, its corresponding location in 3D space $\mathit{s_{i}}:(x_{i},y_{i},z_{i})$ can be obtained by
+    \begin{equation}
+        \begin{split}
+        x_{i} = (u_{i} - c_{x})*z_{i}/f_{x}\\
+        y_{i} = (v_{i} - c_{y})*z_{i}/f_{y}
+        \end{split}
+    \end{equation}
+    where $z_{i}$ is the depth value; $f_{x}$ and $f_{y}$ are the focal length along with $x$ and $y$ directions, respectively; $c_{x}$ and $c_{y}$ are coordinates of the principal points. Note that $f_{x}$, $f_{y}$, $c_{x}$ and $c_{y}$ are camera-relevant parameters and have been given along with the depth maps. Here, we get the point set ${S}=\{ {s_{1}}, {s_{2}}, ..., {s_{i}} , ...  , {s_{H*W}} \}$, which will be used not only in the up-coming normal vector computing process, but also in the edge weights generation module. 
+    
+ 
+    \subsubsection{Neighborhood Defining}  In order to compute the surface normal vectors at pixel $i$, we need to determine its tangent plane, which can be determined in $x$, $y$ and $z$ directions. Specifically, given the target point ${s_{i}}:(x_{i},y_{i},z_{i})$, we define its top-k nearest are $N{_i^k}:=  \{ s_{1}, s_{2}, ..., s_k\}$ based on the Euclid distance computing. But considering the depth gaps between nearby pixels may harm the accuracy of final normal vector output, we add an regulation term: $ |z_{i} - z_{j} | < \gamma *z_{i} $. So far, we get ${s_{i}}$'s k-nearest neighbor set $N{_i^k}$. 
+    
+    \begin{figure*}
+        \centering
+        \includegraphics[width=0.95\textwidth]{pics/encode depth construct graph.png}
+        \caption{(a): Illustration of depth encoding process. We first project depth map to point cloud; then, the least square fitting is adopted to compute the normal vector of each point; finally, we get the final normal map depicting the object surface normal tendencies. (b): Details of graph construction process. The graph construction module takes feature map from two modalities as its input and output fused graph, containing node feature and adjacent matrix. Note that the fusion operation can be a simple summation or concatenation, which will be discussed in \ref{sec_sub_ablation_study} and there are serval options of generating edge weights, each will be introduced in \ref{sec_sub_gen_edge} }
+        \label{fig_depth_encoding_and_graph_construction}
+    \end{figure*}
+ 
+    \subsubsection{Least Square Fitting}  In order to compute the normal vector ${\mathbf{n}}= (n_{x},n_{y},n_{z})$ for the point set $N_{i}$, we first formulate the neighbor point set as $\mathbf{A} \in \mathcal{R}{^{k \times 3}}$. $\mathbf{b} \in \mathcal{R}{^{k \times 1}}$ is a constant vector. Therefore, the normal-vector should satisfy:
+    \begin{equation}
+    \mathbf{A}{\mathbf{n}}=\mathbf{b}, s.t.\|{\mathbf{n}}\|{_2^2}=1
+    \end{equation}
+    We adopt the least square method to find the optimal normal vector via minimizing $ \|\mathbf{A}{\mathbf{n}}-\mathbf{b}\|{_2^2}$, formulated as:
+    \begin{equation}
+    \mathbf{n}=\frac{(\mathbf{A}{^T}\mathbf{A})^{-1}\mathbf{A}{^T}\mathbf{1}}{\|(\mathbf{A}{^T}\mathbf{A})^{-1}\mathbf{A}{^T}\mathbf{1}\|{_2^2}} 
+    \end{equation}
+    where $\mathbf{1}\in \mathcal{R}{^k}$ is a vector with all 1 elements.  \\
+
+ 
+    In summary, by projecting the depth data into point cloud, we get the point set $S$; by define neighborhood number, we get the k-nearest neighbor set $N_i^k$ for $(u_i, v_i)$; by using least square fitting, we get the normal vectors $ \mathbf{n}$ for all points, which can be saved as a three-channel normal map. Note that selecting different neighborhood numbers lead to different normal maps: as k grows larger, the normal map is more "smoothed" and losses details. Empirically, we can get better results when $k=9$. After that, two semantic segmentation networks with different backbones that have been pre-trained on Image-Net are adopted for the initial segmentation.
+
+
+\subsection{Graph Construction}   \label{sec_sub_construct_graph}
+   
+    The Graph Construction Module takes the feature maps from two modalities as its input, and output the constructed graph with node features and the adjacent matrix. Note that the input of this module is the output of the encoder-decoder, whose backbone has been pre-trained on Image-Net so that the output feature map can have initial semantic information. 
+  
+    The goal of this module is, on one hand, to assemble pixels that have similar semantic features together and transform them to a node in the graph; on the other hand, to fuse RGB-D and depth via transforming them into one graph. It is composed of four steps: 1), generate projection matrix; 2), transform the feature from coordinate space to semantic space; 3), aggregate node features from two modalities; and 4), generate the adjacent matrix. Fig \ref{fig_depth_encoding_and_graph_construction}(b) illustrate the overall process. Details will be described in the following 4 sections. 
+
+
+\subsubsection{Projection Matrix Generation}\label{sec_generate_proj_matrix}
+   
+    The projection matrix is derived from the 2D feature map and is mainly used to project the pixel features in the coordinate space into the node features in the semantic space, during which pixels that have similar features in the coordinate space are assigned to the same node in the semantic space. Formally, this module takes the initial feature map ${X}\in\mathcal{R}{^{C\times H\times W}}$ as input, and output the projection matrix ${P}\in\mathcal{R}{^{N\times H \times W}}$. Denoted as 
+    \begin{equation}\label{eq_gen_proj}
+    P = F_g(X)
+    \end{equation}
+
+   
+    The most intuitive instantiation of $F_g$ is to apply region growth method on the feature map. But in practice, this is neither differentiable nor multiply-able, which means it takes much more time than convolution operations and cannot be back-propagated. Inspired by previous work \cite{chen2019glore}, we consider this process as a assignment computing task and the $F_g$ can be a $1*1$ convolution layer, whose input channel and output channel are $C$ and $N$, respectively. 
+
+ 
+    Ideally, the transformed node features should, on one hand, make sure each pixel in the coordinate space will be assigned to one node in the semantic space; on the other hand, be inter-node compact and intra-node distinct, meaning that the assignment process should consider the similarities semantically and positionally. But in practice, generating projection matrix via one single convolution layer cannot satisfy two goals due to the spatial-agnostic characteristic inherited from convolution operations.
+    
+ 
+    We discover that the projection matrix tend to be sparse as the training goes. It can be observed from Fig \ref{fig_biased_assignment}(a), at the initial iteration, the blue dots are evenly distributed over the entire image, indicating that each pixel has one node that are primarily assigned to. But as training proceeds, the proportion of blue dots in the whole image quickly dropped, indicating that pixels in the blue area are assigned to multiple nodes while pixels in the white area are not assigned to any nodes. We name this phenomenon as \textbf{Biased-Assignment Problem}. Such phenomena may further causes some features to be redundant while others are missing.
+
+    As we further analysis the reason why this phenomenon occurs is that as the training goes, we discover that the encoder-decoder networks can correctly categorize easy pixels, whose predicted vectors are similar to one-hot. Thus, Graph neural networks focus on the regions that are difficult for the encoder-decoder networks to discriminate, whose predicted vectors are similar to a uniform distributed vector. Therefore, we can take the Graph Neural Network as a process of hard pixel mining process and another function of the projection matrix lies in finding these difficult pixels. Inspired by \cite{li2018beyondgrids}, we use a Kullback–Leibler Loss function to minimize the divergence between projection matrix $P$ and a uniform-distributed matrix. Mathematically, it can be formed as:
+    \begin{equation}\label{loss_kl}
+        L_{KL} = Kullback-Leibler(P, I)
+    \end{equation}
+    where $I$ is a uniform-distributed matrix shaping like $P$.
+    
+    Another attempt is that replacing the soft-assignment with hard-assignment, after which the pixels will be and only be assigned to one node based-on the likelihood in the projection matrix. In other words, the elements in the projection matrix are either 1 or 0, indicating current pixel is assigned to one particular node or not. Experiments show that such soft-to-hard transition is not as effective as the KL-Loss effect. 
+    
+    
+
+\subsubsection{Feature Transformation} \label{sec_sub_feature_transofrm}
+    Considering that a higher node feature dimension causes an exponential increase in computation during the graph convolution stage, we use a feature transformation module to reduce dimension. It takes feature maps in the coordinate space from two modalities as its input, output the transformed feature maps, denoted as
+    \begin{equation}
+     Z = F_t(X)
+    \end{equation}
+    Note that such transformations are exactly the same on two branches, only with different parameters. In practice, we use a linear function to convert the high dimensional feature into a lower one. There exists a balance between the computational complexity and the performance, which will be discussed in Section \ref{sec_sub_ablation_study}. 
+
+\subsubsection{Project and Fuse}
+       
+    This module takes the transformed features from two modalities $Z$ and the projection matrix $P$ as its input, output the projected and fused node feature. For the projection part, we get projected node feature via a simple matrix multiplication:
+    \begin{equation} 
+        V = Z \cdot P
+        \label{eq_node_embedding}
+    \end{equation}
+    The similar feature transformation process is employed on the 3D branch, only that the projection matrix is inherited from the RGB-D branch, not generated from 3D feature map like equation \ref{eq_gen_proj} did. In other words, for a sampled RGB-D image and depth map, there only exist one projection matrix. Designing like this, on one hand, is for the homogeneity of two graph, which makes it easy to fuse two modalities via a simple concatenation; on the other hand, is because that RGB-D images are rich in texture so we can use RGB-D to "lead" and the depth to "supplement". For the fusion part, we simply apply a summation to get the final node feature matrix.  \\
+
+    
+   
+\subsubsection{Adjacent Matrix Generation}  \label{sec_sub_gen_edge} 
+    Most existing methods generate adjacent matrix based-on the similarity of node features, which makes the GNNs focus on the hidden semantic relations and ignore the region positional information. Instead, we argue that positional information equally plays an important role in pixel-wise semantic segmentation, and such neglect in graph reasoning process may hurt the performance. Therefore, our edge generation module takes the projection matrix as its input and output two symmetric adjacent matrix, considering that the graph is a non-directional graph. Each adjacent matrix indicates node similarities semantically and positionally, named as semantic-aware adjacent matrix and locality-aware adjacent matrix, denoted as $A_s, A_l \in \mathcal{R}{^{N \times N}}$, respectively. 
+
+    For the semantic-aware adjacent matrix, we follow the existing approach where the edge weights are generated based on the semantic similarity. Specifically, we multiply the node feature matrix directly with its transpose. Therefore, \textbf{Semantic-aware edge weights} can be obtained. We take $v_i$ as the node feature embedding computed from Equation \ref{eq_node_embedding}, so the so semantic-aware edge weight between $i$-th and $j$-th node can be computed in a simple multiplication:
+    \begin{equation}\label{eq_adj_semantic}
+        w_{s_{ij}} = v_i \cdot {v_j}^T
+    \end{equation}
+    
+    For the locality-aware adjacent matrix, considering there are $N$ layers in the projection matrix and each layer denotes the possibility of assigning $H \times W$ pixels to current node, we argue that each $H \times W$ shaped 2D matrix can be used to represent the positional information of each node and the whole projection matrix can be used to represent the positional information of all nodes. Here we propose two different approaches to generate locality-aware adjacent. 
+    
+    The most intuitive approach is to multiply the projection matrix directly with its transpose, the resulting adjacency matrix can reflect the similarity in position between two nodes, just like Eq.\ref{eq_adj_semantic} did. Although experiments in Section\ref{sec_sub_ablation_study} shows such approach can achieve competitive results, directly use a high-dimensional vector is neither explainable nor visualizable, and may be not sufficient to monitor the compactness of each region whereas redundant to describe the region location.
+    
+    To model location information into a more visualizable form, we introduce $M \in \mathcal{R}{^{N\times 3}}$ to represent per-node positional center coordinates. Fig \ref{fig_pos_encoding} shows an example of how one layer of the projection matrix generate its corresponding node positional vector in 2D and 3D branch and the visualization of computed positional coordinates in 2D and 3D space. In other words, take 3D branch for example, the positional encoding process can transform a $H*W$ shaped assignment matrix into a $1*3$ shaped positional vector, denoting the region's location in the 3D space. But in practice, this computation process is not only time-consuming but also unable to be back-propagated. Therefore, we apply a linear transformation on the projection matrix $P$ to generated the region center matrix ${M}_{c} \in \mathcal{R}{^{N\times 3}}$. To supervise this process, we use Mean Square Error (MSE) to minimize the distances between transformed coordinates and its corresponding ground truth. It can be formulated as:
+    \begin{equation}\label{loss_mse}
+    L_{MSE} = MSE(M_g, M_c)
+    \end{equation} 
+    Note that the time-consuming computing only happens at the training stage and is used to supervise the transformation. Hence, the \textbf{Locality-aware edge weights} can be obtained by computing the Euclidean distance between each coordinates. We take $(x_i, y_i, z_i)$ as the $i$-$th$ node positional encoding so locality-aware edge weight between $i$-$th$ and $j$-$th$ node can be formulated as:
+    \begin{equation}
+        w_{l_{ij}} = \frac{1}{Euclid(i, j)}
+    \end{equation} 
+
+    
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.45\textwidth]{pics/positional_encoding.png}
+        \caption{Illustration and visualization of 2 types of positional encoding process for one
+        layer in the projection matrix. For 2D branch, we take the projection matrix as its input and for 3D branch, both projection matrix and the depth map are required. The output are computed positional encoding, where $x$ and $y$ is coordinates of region center in 2D space and $z$ is the average depth value of current region. }
+        \label{fig_pos_encoding}
+    \end{figure}  
+
+
+
+\subsection{Graph Neural Networks}
+ 
+    The Graph Neural Networks Module takes fused node features $V$ and the adjacent matrix $E$ as its input, output the updated node features. The aim of this module is to conduct feature learning on the fused graph, furthermore, to capture relations in the semantic space as well as positional attributes in the coordinate space. This semantic capturing and reasoning process can be formulated as:
+    \begin{equation}
+        \tilde{V} = F_n(V, W)
+    \end{equation}
+    where  $F_g$ can be Graph Reasoning or Graph Convolution. In practice, we adopt Graph Convolution Networks \cite{kipf2016GCN} to update node features based on the neighbor nodes. Formally, for the input node embedding $h_v$ with its neighbors embedding $h_u$, where $u={\mathcal{N}(v_i)}$, a graph convolutional layer performs message computing and feature aggregation operations and output the updated embedding of node $\tilde{h_{v}}$.  
+
+ 
+    To preserve features from node itself, different message computation will be performed on node itself and its neighbors:
+    \begin{equation}
+        m_{v} = W_{S}(h_v)
+    \end{equation}
+    \begin{equation}
+        m_{u} = AGG[W_{N}(h_u)]
+    \end{equation}
+    where $W_S$ and $W_N$ can be linear transformation upon the node embedding, and $AGG$ can be a simple averaging, maximization or summation to aggregate neighbors' feature. Then, a summation is applied to get updated node feature:
+    \begin{equation}
+        \tilde{h_{v}} = \sigma(SUM[m_{v}, m_{u}])
+    \end{equation}
+    where $\sigma$ is an activation layer and is used to add network's nonlinearity. Note that the parameters involved are completely learnable and multiple layers can be stacked to increase the range of neighborhoods.
+    \\   
+
+  
+\subsection{Graph Re-projection}  
+ 
+    Our goal at this stage is to transfer updated node feature $V_{new}\in\mathcal{R}{^{N\times D}}$ back to the coordinate space. The re-projection process can be seen as a reverse version of projection module. In practice, we discover that the projection matrix generated in the graph construction process can be re-used here. Specifically, the re-projection matrix is the transpose of the projection matrix, denoted as  $Q=P^T=\{q_1, q_2, ..., q_N \}\in \mathcal{R}{^{H*W \times N}}$. Therefore, the updated feature map can be obtained via a simple matrix multiplication
+    \begin{equation}
+        \tilde{Z}={Q} \cdot \tilde{V}
+    \end{equation}
+    Note that there is a feature dimension shift to transform the feature just like Section \ref{sec_sub_feature_transofrm} did. It can be formulated as $\tilde{X} = \tilde{Z} \cdot T'$, during which introduced no extra parameters and have no negative effect on the final accuracy.  
+
+
+ 
+    Finally, Cross Entropy Loss is used to supervise the output feature map:
+    \begin{equation}\label{loss_ce}
+        L_{CE} = CrossEntropy(\tilde{X}, Y)
+    \end{equation}
+    where $Y$ is the corresponding ground truth.
+
+\subsection{Loss Function}  
+ 
+    Th loss function is composed of 3 parts, as Fig \ref{fig_overview} shows. Firstly, the Cross Entropy is used to reduce the pixel-wise loss between the final output mask and the ground-truth label. Secondly, KL-Divergence is used to avoid the Biased-Assignment issue caused by projection matrix. Lastly, Mean Square Error is used to supervise the positional compactness of each region. Formally, the total loss function is computed as:
+    \begin{equation}
+        Loss =  L_{CE} + \alpha  \cdot L_{KL} + \beta \cdot L_{MSE}
+    \end{equation}
+    where $L_{KL}$ and $L_{MSE}$ have beed introduced in Equation \ref{loss_kl} and \ref{loss_mse} and \ref{loss_ce}. Note that in Fig \ref{fig_overview}, we only show the $L_{KL}$ and $L_{CE}$. It is because that it $L_{MSE}$ is only one of many ways to generate adjacency matrix, and when we use other generation methods it is no longer necessary.  \\     
+
+    \begin{table*}
+    \caption{Ablation Study on 2D branch}\label{table_ablation_2D}
+    \centering
+    \begin{tabular}{l|c|c|c|c|c|c|c|c|c|c}
+        \hline
+        \multirow{2}*{ }&\multicolumn{3}{|c|}{improvements on $P$ }&\multicolumn{3}{|c|}{choices on edge weights generation}&\multicolumn{2}{|c|}{choices on GNNs}&\multirow{2}*{ mIOU(\%) }&\multirow{2}*{ $\uparrow$ (\%)}\\
+        \cline{2-9}
+        & KL-Loss & Soft &Hard  & from V & from $P$ & from centroids & Graph Reasoning&Graph Convolution &\\ 
+        \hline
+        2D baseline &   & Y &   & Y &   &   & Y &   & 44.3&-\\
+        \hline
+        baseline+ & Y & Y &   & Y &   &   & Y &   & 45.6&1.3\\
+        \hline
+        baseline+ & Y &   & Y & Y &   &   & Y &   & 45.8&1.5\\
+        \hline
+        baseline+ & Y &   & Y &   & Y &   & Y &   & 46.0&1.7\\
+        \hline
+        baseline+ & Y &   & Y &   &   & Y & Y &   & 46.3&2.0\\
+        \hline
+        baseline+ & Y &   & Y &   &   & Y &   & Y & 47.0&2.3\\
+        \hline
+    \end{tabular}
+    \end{table*}
+    
+        \begin{table*}
+        \caption{Ablation Study on fusion choice}\label{table_ablation_fusion}
+        \centering
+        \begin{tabular}{l|c|c|c|c|c|c|c}
+            \hline
+            \multirow{2}*{  }&\multicolumn{2}{|c|}{aggregation}&\multicolumn{3}{|c|}{input choice of 3D branch}&\multirow{2}*{ mIOU(\%) }&\multirow{2}*{ $\uparrow$ (\%)}\\
+            \cline{2-6}
+            & Sum& Cat & depth map & normal map & HHA&\\ 
+            \hline
+            3D baseline &  & Y &  Y &   &   & 48.9& - \\
+            \hline
+            baseline+ & Y &   & Y  &   &   &  49.5& 0.6 \\
+            \hline
+            baseline+ & Y &   &   & Y &   &  50.6& 1.7 \\
+            \hline
+            baseline+ & Y &   &   &   & Y &  50.8& 1.9 \\
+            \hline
+        \end{tabular}
+        \end{table*}
+
+        In summary, given a feature map ${X} \in \mathcal{R}{^{H\times W\times C}}$, we first generate the projection matrix ${P}$ and transform $X$ into node feature $V$; then, edge weights are generated based on the projection matrix, depth map and node feature; after that, we constructed graph  $\mathcal{G}=(V, E)$ and perform Graph Convolution on it; lastly, the updated node feature are re-projection back to the feature map. Note that the proposed method is applied on the output of the encoder-decoder module, which have beed pre-trained on ImageNet so the initial output feature map has semantics on some degree. We pre-define the number of the node in the graph as $N$, and the feature dimension of each node as $D$, whose effect will be further discussed in Section \ref{sec_sub_ablation_study}.  
+
+
+    \begin{table}
+        \caption{Comparison-with-SOTAs on NYU-v2}\label{table_nyu_sota}
+        \centering
+        \begin{tabular}{c|c|c|c|c}
+            \hline
+            Method & Backbone & 3D data & mAcc(\%) & mIOU(\%) \\
+            \hline
+            FCN-16s\cite{long2015fully}  & VGG16*2 & HHA & 46.1 & 34.0 \\
+    
+            RDF-Net* \cite{park2017rdfnet} & R50*2 & depth & 60.4 & 47.7 \\
+    
+            LSD-Net \cite{cheng2017locality} & VGG16*2 & HHA & 60.7 & 45.9 \\    
+    
+            Malleable 2.5D \cite{2020malleable} & R50 & depth & - &  48.8 \\    
+    
+            2.5D-Convolution \cite{xing201925DConv} & R101*2 & HHA & - &  49.1 \\    
+            
+            ShapeConv \cite{2021shapeconv} &  R50*2  &  HHA & 59 & 47.3 \\    
+    
+            Bi-directional \cite{chen2020bi} &  R50*2  & HHA &  - & 50.4 \\    
+     
+            % ESA-Net \cite{seichter2021efficient} &  R50*2 & depth &  -  & 50.53 \\    
+    
+            InverseForm \cite{borse2021inverseform}&  R101  & - &  - & 53.1 \\    
+    
+            Co-Attention* \cite{zhou2022canet} &  R50*2  &  depth & 62.6 & 49.6  \\    
+    
+            RGB-X \cite{liu2022cmx} &  MiT-B2  & HHA &  - & 52.0 \\    
+            
+            \hline
+            \multirow{3}*{ Ours }  & R50+R18 & depth & 61.9 & 49.5\\
+            ~ & R50+R18 & normal & 62.7 & 50.6\\
+            ~ & R50+R18 & HHA & 63.0 & 50.8\\
+            \hline
+        \end{tabular}
+        \end{table}
+     
+    
+\section{Experiments} 
+
+\subsection{Datasets and Metrics}  
+    The existing RGB-D indoor dataset is challenging due to complex layouts and severe occlusions. We carry out comprehensive experiments on NYUDv2-40  \cite{silberman2012indoor} and SUN RGB-D \cite{song2015sun} to evaluate the effectiveness of the proposed method. \textbf{NYUDv2} is a dataset composed of video sequences from a variety of indoor scenes as recorded by both the RGB and Depth cameras from the Microsoft Kinect. It contains 1,449 RGB-D samples, and each sample is composed of RGB image, depth map, camera parameter matrix and its semantic label mask, where all pixels are labeled with 13 and 40 classes. We adopt the most popular setting that 795 images for training and 654 images for testing. \textbf{SUN RGB-D Dataset} is composed of 10, 335 RGB-D samples, coming from existing RGBD datasets \cite{silberman2012indoor} \cite{janoch2013category} \cite{xiao2013sun3d} as well as newly captured data. We use the standard training/testing split \cite{song2015sun} of 5285/5050 in our experiment with 37-category semantic labels. Mean Accuracy (MeanAcc) and Mean Region Intersection Over Union (MeanIoU) are used for the per-class evaluation.  
+
+
+\subsection{Implementation Details}  
+ 
+    We employ a classic semantic segmentation networks DeepLabV3 with ResNet50, as our backbone, which have been pre-trained on ImageNet. The proposed method is appended directly at the end of the final output layer. The networks are updated using Adam, where the initial learning rate is 0.01, the weight decay is 0.0002. The experiments are implemented with PyTorch and with one NVIDIA RTX 3090 GPU. The batch size is set as 4. 
+
+    \subsection{Ablation Study}\label{sec_sub_ablation_study} 
+    We compare the results with different settings to evaluate the effectiveness of proposed modules, which can be categorized as two types: the constraints on the projection matrix and how the edge weights are generated for 2D branch, the fusion choice for 3D branch. All these experiments are conducted on NYUv2 dataset and the metrics we evaluate is mIOU. 
+    
+    For 2D branch, we take the widely used DeepLabV3+ with backbone ResNet50 as our RGB baseline. To alleviate the Biased-Assignment issue, we change the assignment type and add a KL-loss which have been introduced in section \ref{sec_sub_construct_graph}. As the first 3 lines of Table \ref{table_ablation_2D} have shown, using a KL-Divergence Loss on the projection matrix can bring a 1.2\% improvement, and changing the assignment from soft to hard can bring a 0.2\% improvement, whereas the combination of two parts can bring a total 1.3\% improvement. To find the optimal way of generating edge weights, we compare 3 different approaches and find that generating edge weights from region centroids achieves the highest mIOU. We also compare the results of different graph neural networks, deploying a GCN layer instead of original Graph Reasoning layer can boost a 0.5\% improvement. It is worth noting that when we take the inference time into consideration, generating edge weights from projection matrix can achieve competitive mIOU whereas using much less parameters. 
+
+    For the fusion branch, we average the predictions of two parallel DeepLabV3+ as our RGB-D baseline. As Table \ref{table_ablation_fusion} has shown, the simple summation of two feature maps not only outperforms the concatenation on the final prediction but also with relative smaller amount parameters. The input of 3D branch can be depth map, normal map and HHA map, and the latter two achieve competitive results whereas directly input depth map has limited improvements, which validate our assumption that traditional CNN operators are not good at capturing depth tendencies and converting it to normal map or HHA map can alleviate this problem.
+
+    \begin{table}
+        \caption{Comparison-with-SOTAs on SUN RGB-D}\label{table_sun_sota}
+        \centering
+        \begin{tabular}{c|c|c|c|c}
+            \hline
+            Method & Backbone & 3D data & mAcc(\%) & mIOU(\%) \\
+            \hline
+            FCN-32s \cite{long2015fully}  & VGG16*2 & depth & 41.13 & 29.0 \\
+    
+            FuseNet \cite{2016fusenet} & VGG16*2 & depth & 48.46 & 	37.76 \\
+    
+            LSD-Net \cite{cheng2017locality} & VGG16*2 & HHA & 58.0 & - \\  
+    
+            RDF-Net* \cite{park2017rdfnet} & R152*2 & depth & 60.1	& 47.7  \\  
+    
+            % 2020malleable
+            2.5D-Convolution \cite{xing201925DConv} & R101*2 & HHA & - &  48.2 \\    
+    
+            RGBxD \cite{cao2021rgbxd} &  R101  & HHA &  58.8 & 47.7 \\    
+     
+            ESA-Net \cite{seichter2021efficient}&  R50*2 & depth &  -  & 48.31 \\    
+    
+            ShapeConv \cite{2021shapeconv} &  R50*2  &  HHA & 56.8 & 46.3 \\  
+
+            Co-Attention* \cite{zhou2022canet} &  R50*2  &  depth & 59.0 & 48.1  \\  
+
+            Co-Attention* \cite{zhou2022canet} &  R101*2  &  depth & 60.5 & 49.3  \\   
+      
+            \hline
+            \multirow{3}*{ Ours } & R50+R18 & depth & 58.6 & 47.9\\
+            ~ & R50+R18 & normal & 59.7 & 49.1\\
+            ~ & R50+R18 & HHA & 60.1 & 49.3\\
+            \hline
+        \end{tabular}
+        \end{table}
+
+
+\subsection{Comparison with State-of-Arts}  
+    We compare the proposed method with previous methods with similar settings on two public datasets. Table \ref{table_nyu_sota} and \ref{table_sun_sota} have shown the mAcc and mIOU of different methods on NYUDv2 and SUN RGB-D. We also show their choice of 3D data input type and the choice of backbone each method has adopted, considering these settings have a great impact on the final results. It can be observed from the table that with same backbone choice and 3D data selection, the proposed method achieved competitive results, and replacing the input of 3d branch
+    with HHA further boost the performance. 
+    
+    It is worth noting that when the 3D data are both depth maps, the performance of Co-attention \cite{zhou2022canet}, it is because that on one hand, \cite{zhou2022canet} build sound interaction between RGB and depth features, whereas we just deploy a simple summation guiding by texture features; on the other hand, \cite{zhou2022canet} adopt a multi-scale loss function as we have indicated with "*" in the table, whereas we only calculate a single final output loss. When the 3D data are both HHA, RGB-X \cite{liu2022cmx} outperforms the rest methods with a large margin. We argue that it is because that RGB-X is a cross-modal fusion framework, which utilizes the advantages of vision-transformer, resulting a strong long-range context exchange at a global level.
+    
+    Among the methods, there are also some methods achieves noticeable results without doubling backbone. Malleable 2.5D \cite{2020malleable} design delicate convolutional operations for the feature learning on the depth data, resulting competitive results using depth maps. InverseForm \cite{borse2021inverseform} proposes a novel boundary-aware loss term for semantic segmentation, which achieves similar purpose on the boundary-fixing level compared with our method, but the different part is that we also aim to learn the regions dependencies, not just the boundary improvement. \cite{cao2021rgbxd} is a early fusion method, fusing RGB and 3D data at the input level, therefore, there does not exist backbone doubling. 
+    
+    In summary, the strength of our method is mainly at two aspects. Firstly, we propose to encode the depth map as an object surface normal map, which enables us to adopt a lighter-weight backbone network for 3D feature extraction. Secondly, the adoption of pixel-node-pixel pipeline and its followed-up improvements enables the network "reason like a human". In other words, it can learn relations on the region level, not just pixel level.
+
+    \subsection{Further Analysis}\label{sec_sub_further}
+    To further analysis the impact of transformation module, we conduct experiments using the same settings except different 3 parts: the node number in each graph, the feature dimension of each number and the existence of feature transformation module. There is a threshold at the choice of node number and feature dimension, meaning that excessive increase in model complexity may have a negative impact on the model performance. The existence of the feature transformation can reduce the number of parameters involved in the GNN process, but it slightly decrease the final result. 
+
+    As a crucial component of our pipeline, the projection matrix plays an important part in transforming features from pixels to graph nodes, yet few researchers have analyzed it in previous works. To dive into the projection matrix and evaluate the effectiveness of the constraints we add on it, we randomly pick one sample from the dataset and visualize the assignment at different layers as well as different training stages. Considering that the original high-dimensional projection matrix is not easy to visualize, we pick its maximum in the channel dimension to get a single channel matrix, which can be easily viewed in greyscale. As Fig \ref{fig_biased_assignment} shows, the larger maximum value we obtained is, the more "confident" our network will be to assign current pixel to one certain node, and the brighter this pixel will be. Just like we previously discussed in Sec \ref{sec_generate_proj_matrix}, another direction to understand the function of the projection matrix is the hard-pixel mining aspect. Combining the observation we get from Fig \ref{fig_biased_assignment}, we can discover that the deployment of KL-Loss makes the network less confident, so more pixels are considered as "difficult pixels", on which the learning of the graph neural network can be carried out better.
+
+
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.45\textwidth]{pics/effectiveness_of_kl.png}
+    \caption{Illustration of the Biased-Assignment and the effectiveness of KL-Loss. All the visualization are from the same sample. Each column shows the assignment at the same training stage with different settings: (a): hard-assignment without KL-Loss constraints; (b): hard-assignment with KL-Loss constraints; (c): soft-assignment without KL-Loss constraints; (d): soft-assignment with KL-Loss constraints. Each row shows the assignment with the same setting at different training stages: 0-$th$, 100-$th$, 500-$th$, 1000-$th$, 2000-$th$ iteration(s).  }
+    \label{fig_biased_assignment}
+\end{figure} 
+
+\begin{figure*}
+    \addtocounter{figure}{-1}
+    \centering
+    \subfigure[RGB]{
+    \begin{minipage}{0.12\linewidth}
+        % \centering
+        \includegraphics[width=1.0\columnwidth]{pics/results/images/14.jpg}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/images/206.jpg}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/images/278.jpg}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/images/468.jpg}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/images/849.jpg}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/images/1254.jpg}\\
+        %\vspace{0.001cm}
+    \end{minipage}%
+    }%
+    \subfigure[depth map]{
+    \begin{minipage}{0.12\linewidth}
+        % \centering
+        \includegraphics[width=1.0\columnwidth]{pics/results/depth/14.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/depth/206.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/depth/278.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/depth/468.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/depth/849.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/depth/1254.png}\\
+        %\vspace{0.001cm}
+    \end{minipage}%
+    }%
+    \subfigure[normal map]{
+    \begin{minipage}{0.12\linewidth}
+        % \centering
+        \includegraphics[width=1.0\columnwidth]{pics/results/normals/14.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/normals/206.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/normals/278.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/normals/468.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/normals/849.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/normals/1254.png}\\
+        %\vspace{0.001cm}
+    \end{minipage}%
+    }%
+    \subfigure[Groundtruth]{
+    \begin{minipage}{0.12\linewidth}
+        % \centering
+        \includegraphics[width=1.0\columnwidth]{pics/results/labels40/14.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/labels40/206.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/labels40/278.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/labels40/468.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/labels40/849.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/labels40/1254.png}\\
+        %\vspace{0.001cm}
+    \end{minipage}%
+    }%
+    \subfigure[2D Baseline]{
+    \begin{minipage}{0.12\linewidth}
+        % \centering
+        \includegraphics[width=1.0\columnwidth]{pics/results/2dbaseline/14.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/2dbaseline/206.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/2dbaseline/278.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/2dbaseline/468.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/2dbaseline/849.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/2dbaseline/1254.png}\\
+        %\vspace{0.001cm}
+    \end{minipage}%
+    }%
+    \subfigure[2D Ours]{
+    \begin{minipage}{0.12\linewidth}
+        % \centering
+        \includegraphics[width=1.0\columnwidth]{pics/results/2dours/14.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/2dours/206.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/2dours/278.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/2dours/468.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/2dours/849.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/2dours/1254.png}\\
+        %\vspace{0.001cm}
+    \end{minipage}%
+    }%
+    \subfigure[3D Baseline]{
+    \begin{minipage}{0.12\linewidth}
+        % \centering
+        \includegraphics[width=1.0\columnwidth]{pics/results/3dbaseline/14.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/3dbaseline/206.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/3dbaseline/278.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/3dbaseline/468.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/3dbaseline/849.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/3dbaseline/1254.png}\\
+        %\vspace{0.001cm}
+    \end{minipage}%
+    }%
+    \subfigure[3D Ours]{
+    \begin{minipage}{0.12\linewidth}
+        % \centering
+        \includegraphics[width=1.0\columnwidth]{pics/results/3dours/14.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/3dours/206.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/3dours/278.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/3dours/468.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/3dours/849.png}\\
+        %\vspace{0.001cm}
+        \includegraphics[width=1.0\columnwidth]{pics/results/3dours/1254.png}\\
+        %\vspace{0.001cm}
+    \end{minipage}%
+    }%
+    \caption{Visualization of some quantitive results. The segment improvements have been marked with red (or black for second row) rectangles, best view in color. It is worth noting that applying the proposed methods on the 2D branch can alleviate the emergence of irregular patches, and incorporating 3D data can increase the consistency of object surface in the segment results and further boosts the final performance. }
+    \label{fig_vis_res}
+    \end{figure*}
+
+    \section{Visualization}
+    We sample 6 set of data from the testing set of NYUDv2. As Fig \ref{fig_vis_res}
+    has shown, comparing column(e) and (f), (g) and (h), we can observe that improvements, i.e, constraints on the projection matrix and positional
+    encoding process, we have made, can reduce the presence of irregular patches. Comparing column(b) and (c), we can observe that the 3-channel normal maps are more rich in texture compared with 1-channel depth map and shows the consistency of the surface of the object in a more direct way. Comparing column(e) and (g), (f) and (h), we can observe that feature extracting on normal maps can improve geometric consistency and further boost the the segmentation results. But there still exist irregular patch where semantic label are missing due to poor lightening condition and long distance, where our performance slightly dropped but still preserve reasonable semantic consistency.
+
+
+    
+\section{Conclusion}
+    How to make the neural network "reason like a human" is still an area that remains to be studied. In this paper, we propose a RGB-D semantic segmentation method that empower the network to learn dependencies on arbitrary regions and further alleviate the counter-intuitive segmentation problem. A depth encoding method is applied to explicitly extract object surface geometric feature, which is beneficial for the following feature learning process. The graph-based pipeline is adopted to reasonably fuse features from two modalities in a texture-prior style. We have demonstrated that our approach is effective on two public datasets. In the future work, how to more efficiently incorporate node positional as well as semantic information into graph data, and how to improve graph neural networks the are yet to be further studies.
+
+\section*{Acknowledgment}
+    The work is supported by the following projects: National Natural Science Foundation of China (NSFC) Essential project, Nr.: U2033218, 61831018.
+ 
+% \nolinenumbers  %结束编号，若要全文编号，该条命令可不加
+
+% \bibliographystyle{plain}
+
+\bibliography{ref}
+
+\end{document}
