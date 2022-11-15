@@ -31,10 +31,7 @@ GA, 30332 USA e-mail: (see http://www.michaelshell.org/contact.html).}% <-this %
 \maketitle
 
 \begin{abstract}
-    Most existing RGB-D semantic segmentation focus on the feature level fusion, designing complex cross-modality and cross-scale fusion module to extract features. However, these methods may cause misalignment problem in the feature fusion process and counter-intuitive patches in the segmentation results.
-    
-    To solve above two problems, inspired by the previous pixel-node-pixel pipeline, this paper propose to 1), fuse features from two modalities in a late fusion style, during which the geometric feature injection is guided by texture feature prior; 2), employ Graph Neural Networks (GNNs) on the fused feature to alleviate the emergence of irregular patches. At 3D feature extraction stage, we argue that traditional CNNs are not efficient enough for depth maps. So we encode depth map into normal map, after which CNNs can easily extract object surface tendencies. At projection matrix generation stage, we find there exist biased-assignment issue in the original pipeline. So we add a Kullback–Leibler Loss to ensure pixel features are not missed out. At adjacent matrix construction stage, we argue that positional information is equally important compared with semantics. So we connect regions that are close to each other in the Euclidean space as well as in the semantic space with larger edge weights.
-
+    Most existing RGB-D semantic segmentation methods focus on the feature level fusion, including complex cross-modality and cross-scale fusion modules. However, these methods may cause misalignment problem in the feature fusion process and counter-intuitive patches in the segmentation results. Inspired by the popular pixel-node-pixel pipeline, we propose to, 1) fuse features from two modalities in a late fusion style, during which the geometric feature injection is guided by texture feature prior; 2) employ Graph Neural Networks (GNNs) on the fused feature to alleviate the emergence of irregular patches by inferring patch relationship. At the 3D feature extraction stage, we argue that traditional CNNs are not efficient enough for depth maps. So, we encode depth map into normal map, after which CNNs can easily extract object surface tendencies. At projection matrix generation stage, we find the existing of biased-assignment issue in the original pipeline. Therefore, we adopt the Kullback–Leibler Loss to ensure no missing of important pixel features. Moreover, at the adjacent matrix construction stage, existing methods pay no attention to the positional information compared to semantics. Thus, we connect regions that are close to each other in the Euclidean space as well as in the semantic space with larger edge weights.
     Extensive experiments on two public datasets, NYU-DepthV2 and SUN RGB-D, have shown that our approach can consistently boost the performance of RGB-D semantic segmentation task.
     \end{abstract}
 
@@ -52,7 +49,7 @@ GA, 30332 USA e-mail: (see http://www.michaelshell.org/contact.html).}% <-this %
 \begin{figure}
     \centering
     \includegraphics[width=0.4\textwidth]{pics/counter-intuitive.png}
-    \caption{The counter-intuitive cases. Existing segmentation results exist scenes that are against human's commonsense. The first row shows that there exist toilet(white) next to the window(purple), and the second row shows there exist emerge a small patch of ceiling in the middle of shelves. }
+    \caption{The counter-intuitive samples. Existing segmentation methods output scenes that are against human's commonsense. The first row shows that a toilet (white) next to the window (purple), and the second row shows a small patch of ceiling in the middle of shelves. }
     \label{fig_counter_intuitive}
 \end{figure}
 
@@ -65,7 +62,7 @@ GA, 30332 USA e-mail: (see http://www.michaelshell.org/contact.html).}% <-this %
 \begin{figure}
     \centering
     \includegraphics[width=0.45\textwidth]{pics/pipelines.png}
-    \caption{(a) The popular pixel-graph-pixel networks pipeline. (b) The proposed fusion pipeline. Our method mainly differs in 3 aspects. 1), the encoding process so that depth map can be better consumed by CNNs; 2), the improvements we made in the graph construction process so that pixel-to-node assignment can be more reasonable and positional information can be considered; 3), the injection of 3D branch so that complementary information can be aggregated.}
+    \caption{(a) The popular pixel-graph-pixel networks pipeline. (b) The proposed fusion pipeline. Our approach mainly differs in three aspects. 1) the encoding process so that depth map can be better consumed by CNNs; 2) the improvements we made in the graph construction process so that pixel-to-node assignment can be more reasonable and positional information can be considered; 3) the injection of 3D branch so that complementary information can be aggregated.}
     \label{fig_pipeline}
 \end{figure}
  
@@ -82,13 +79,13 @@ GA, 30332 USA e-mail: (see http://www.michaelshell.org/contact.html).}% <-this %
 \begin{figure}
     \centering
     \includegraphics[width=0.4\textwidth]{pics/biased_assignment.png}
-    \caption{Illustration of Biased-Assignment and Ambiguous-Locality problems. We randomly pick two samples form the dataset and visualize its pixel-to-node assignment at different iteration stages. Considering that elements in the projection matrix are probabilities ranging from 0 to 1, we only color top-$k$ elements at each layer where $k$ equals to the number of pixels divided by the number of nodes. The blue dots represent that current pixel are assign to at least one node. The red dots represent the Euclidean center of each nodes. }
+    \caption{Illustration of Biased-Assignment and Ambiguous-Locality problems. We randomly pick two samples from the dataset and visualize their pixel-to-node assignment at different iteration stages. Considering that elements in the projection matrix are probabilities ranging from 0 to 1, we only color top-$k$ elements at each layer where $k$ equals to the number of pixels divided by the number of nodes. The blue dots represent that current pixels are assigned to at least one node. The red dots represent the Euclidean center of individual nodes. }
     \label{fig_blue_red}
 \end{figure}
     
-    2. To alleviate the Biased-Assignment and Ambiguous-Locality problem in graph construction process, we add constraints on the projection matrix and changed the way how adjacent matrix is generated.
+    2. To alleviate the Biased-Assignment and Ambiguous-Locality problem in the graph construction process, we add constraints on the projection matrix and changed the way how adjacent matrix is generated.
 
-    3. Extensive experiments on NYU-v2 and SUN RGB-D show that the proposed approach achieve competitive state-of-the-art performance. 
+    3. Extensive experiments on NYU-v2 and SUN RGB-D show that the proposed approach achieves competitive state-of-the-art performance. 
 
 \section{Related Works} \label{sec_related}
 
@@ -115,7 +112,7 @@ GA, 30332 USA e-mail: (see http://www.michaelshell.org/contact.html).}% <-this %
 
     More recently, methods that taking RGB-D semantic segmentation as a distillation task or introducing transformer modules have also achieved competitive results. \cite{jiao2019geometrydistillation} propose to jointly infer two modalities information by distilling geometry-aware embedding and use the learned embedding to improve segmentation result. \cite{liu2021distillation} distill 3D knowledge from a pre-trained 3D network to supervise a 2D network and calibrate the 2D and 3D features for better integration via a two-stage dimension normalization. \cite{liu2022cmx} calibrate the feature of two modalities in spatial-wise and channel-wise dimensions via a Cross-Modal Feature Rectification Module, and deploy a Feature Fusion Module in a cross-attention style to mix features from different modalities for the final semantic prediction. 
   
-    To summarize, the difficulties for the RGB-D semantic segmentation task are as follows. 1) the misalignment issue and feature selection bias when the fusion happens, i.e., we need to determine when and how the fusion happens, which usually introduce computational redundancy or omission of features; 2) the trade-off between better results and more complex network designs, i.e., the multi-tasking setting may increase the performance but more labels are demanded, which is an important consideration when applied to industrial applications. 
+    To summarize, the difficulties for the RGB-D semantic segmentation task are as follows. 1) the misalignment issue and feature selection bias when the fusion happens, i.e., we need to determine when and how the fusion happens, which usually introduce computational redundancy or omission of features; 2) the trade-off between better results and more complex network designs, i.e., the multi-tasking setting may increase the performance, but more labels are demanded, which is an important consideration when applied to industrial applications. 
 
 \subsection{GNNs in Computer Vision}  
  
@@ -173,7 +170,7 @@ GA, 30332 USA e-mail: (see http://www.michaelshell.org/contact.html).}% <-this %
     \begin{figure*}
         \centering
         \includegraphics[width=0.95\textwidth]{pics/encode depth construct graph.png}
-        \caption{(a): Illustration of depth encoding process. We first project depth map to point cloud; then, the least square fitting is adopted to compute the normal vector of each point; finally, we get the final normal map depicting the object surface normal tendencies. (b): Details of graph construction process. The graph construction module takes feature map from two modalities as its input and output fused graph, containing node feature and adjacent matrix. Note that the fusion operation can be a simple summation or concatenation, which will be discussed in \ref{sec_sub_ablation_study} and there are serval options of generating edge weights, each will be introduced in \ref{sec_sub_gen_edge} }
+        \caption{(a): Illustration of depth encoding process. We first project depth map to point cloud; then, the least square fitting is adopted to compute the normal vector of each point; finally, we get the final normal map depicting the object surface normal tendencies. (b): Details of graph construction process. The graph construction module takes feature map from two modalities as its input and output fused graph, containing node feature and adjacent matrix. Note that the fusion operation can be a simple summation or concatenation, which will be discussed in \ref{sec_sub_ablation_study} and there are serval options of generating edge weights, each will be introduced in \ref{sec_sub_gen_edge} }[JX1]
         \label{fig_depth_encoding_and_graph_construction}
     \end{figure*}
  
@@ -425,7 +422,7 @@ GA, 30332 USA e-mail: (see http://www.michaelshell.org/contact.html).}% <-this %
     For the fusion branch, we average the predictions of two parallel DeepLabV3+ as our RGB-D baseline. As shown in Table \ref{table_ablation_fusion}, the simple summation of two feature maps not only outperforms the concatenation on the final prediction but also needs relatively smaller number of parameters. The input of 3D branch can be depth map, normal map, and HHA map. The latter two achieve competitive results while directly using depth map as input has limited improvements. This validate our assumption that traditional CNN operators are not good at capturing depth tendencies and converting the depth map to normal map or HHA map can alleviate this problem.
 
     \begin{table}
-        \caption{Comparison-with-SOTAs on SUN RGB-D Dataset.}\label{table_sun_sota}
+        \caption{Comparison-with-SOTAs on the SUN RGB-D Dataset.}\label{table_sun_sota}
         \centering
         \begin{tabular}{c|c|c|c|c}
             \hline
@@ -624,7 +621,7 @@ GA, 30332 USA e-mail: (see http://www.michaelshell.org/contact.html).}% <-this %
         %\vspace{0.001cm}
     \end{minipage}%
     }%
-    \caption{ Quantitative visualization. The improved segmented regions are marked with red (or black for second row) rectangles. Noticeably, the proposed module on the 2D branch can alleviate the emergence of irregular patches. Incorporating 3D data can increase the consistency of object surface in the segmented results and further boost the final performance. Best view in color.}
+    \caption{ Quantitative visualization. The improved segmented regions are marked with red (or black for the second row) rectangles. Noticeably, the proposed module on the 2D branch can alleviate the emergence of irregular patches. Incorporating 3D data can increase the consistency of object surface in the segmented results and further boost the final performance. Best view in color.}
     \label{fig_vis_res}
     \end{figure*}
 
@@ -646,3 +643,4 @@ GA, 30332 USA e-mail: (see http://www.michaelshell.org/contact.html).}% <-this %
 \bibliography{my_ref}
 
 \end{document}
+[JX1]你这一版本的图标题有点过长了。。。有些放到文中的，标题里也无法解释那么多东西，只需要把关键的点出来即可，其他的读者去文中看。这个精简一下。
