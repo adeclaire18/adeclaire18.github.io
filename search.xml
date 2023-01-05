@@ -30,11 +30,11 @@
     
     
     <entry>
-      <title>人生的embedding是什么？</title>
-      <link href="/2021/06/19/20210625_zhusongchun/"/>
-      <url>/2021/06/19/20210625_zhusongchun/</url>
+      <title>China 3DV 大会</title>
+      <link href="/2021/06/19/20210619_china3dv/"/>
+      <url>/2021/06/19/20210619_china3dv/</url>
       
-        <content type="html"><![CDATA[<p>关注了朱松纯教授之后，找到一些他和他的研究生的相关文章，记录一些 enlightening words。</p><p>a. 一个脑模型就是世界观、人生观、价值观的一个数学的表达。</p><p>b. 苏轼的一生波澜起伏，他的思想境界也在高维空间的“大平衡” 和降维空间的“小平衡”中反复变换。实际上，每个人的人生都是如此，需要在社会规范和个人价值追求的冲突与统一中反复调节，找到内心的平衡点。</p><p>c. 现有的数据驱动的人工智能是大数据小范式。</p><p>d. 机器学习这个过程没有因果，没有机器人行动，是纯粹的、被动的统计学习。目前那些做视觉识别和语音识别都是这一类。其实真正的学习是一个交互的过程。</p><p>e. 我以前也谈到过一个“路灯的隐喻”，科学研究就像在一个漆黑的夜晚找钥匙，大家喜欢聚在路灯底下找，但是很可能钥匙不在那个灯底下。</p><p>ref:</p><ul><li><a href="%22https://mp.weixin.qq.com/s/KhiHAGFjCUYqq5fdYBBlDA%22">朱松纯：浅谈人工智能</a></li><li><a href="'https://mp.weixin.qq.com/s/3zeBP%E2%80%93Z0xcQEalccGm2iw'">致学弟学妹——优秀学长代表范丽凤学姐</a></li></ul>]]></content>
+        <content type="html"><![CDATA[<p>有幸参加了今年的China 3DV的大会，有些notes值得记录。</p><h4 id="1-朱松纯：人生的embedding是什么？"><a href="#1-朱松纯：人生的embedding是什么？" class="headerlink" title="1. 朱松纯：人生的embedding是什么？"></a>1. 朱松纯：人生的embedding是什么？</h4><ul><li>年轻人要对自己有信心，在研究方向上，不要因为“热门”去选择，而以长期来看，十年后这个领域如何。<a href="assets/20210625_embedding.md">20210625_embedding</a></li><li>神经网络的可解释性，神经网络的回归本质使其难以out performence且受限于数据集.</li><li>从大数据到大任务，From data-driven to task-oriented，如何定义这个大任务。</li></ul><h4 id="2-为什么复现论文难？"><a href="#2-为什么复现论文难？" class="headerlink" title="2. 为什么复现论文难？"></a>2. 为什么复现论文难？</h4><p>底层功能实现能力欠缺。基础的图像处理相关的功能，会掉包是不够的，更要能自己代码实现。</p><h4 id="3-产业和学术差别在哪？"><a href="#3-产业和学术差别在哪？" class="headerlink" title="3. 产业和学术差别在哪？"></a>3. 产业和学术差别在哪？</h4><ul><li>实验室的理想环境 vs 现实的复杂环境；</li><li>发论文要求的高精度 vs 量产时需要的低成本；</li><li>有限的、格式统一的公开数据集 vs 丰富的未经处理的原始数据。</li><li>难得的是把需求链路打通，而不只是提高一点点精度。</li></ul>]]></content>
       
       
       
@@ -43,11 +43,11 @@
     
     
     <entry>
-      <title>China 3DV 大会</title>
-      <link href="/2021/06/19/20210619_embedding/"/>
-      <url>/2021/06/19/20210619_embedding/</url>
+      <title>人生的embedding是什么？</title>
+      <link href="/2021/06/19/20210625_embedding/"/>
+      <url>/2021/06/19/20210625_embedding/</url>
       
-        <content type="html"><![CDATA[<p>有幸参加了今年的China 3DV的大会，有些notes值得记录。</p><h4 id="1-朱松纯：人生的embedding是什么？"><a href="#1-朱松纯：人生的embedding是什么？" class="headerlink" title="1. 朱松纯：人生的embedding是什么？"></a>1. 朱松纯：人生的embedding是什么？</h4><ul><li>年轻人要对自己有信心，在研究方向上，不要因为“热门”去选择，而以长期来看，十年后这个领域如何。</li><li>神经网络的可解释性，神经网络的回归本质使其难以out performence且受限于数据集.</li><li>从大数据到大任务，From data-driven to task-oriented，如何定义这个大任务。</li></ul><h4 id="2-为什么复现论文难？"><a href="#2-为什么复现论文难？" class="headerlink" title="2. 为什么复现论文难？"></a>2. 为什么复现论文难？</h4><p>底层功能实现能力欠缺。基础的图像处理相关的功能，会掉包是不够的，更要能自己代码实现。</p><h4 id="3-产业和学术差别在哪？"><a href="#3-产业和学术差别在哪？" class="headerlink" title="3. 产业和学术差别在哪？"></a>3. 产业和学术差别在哪？</h4><ul><li>实验室的理想环境 vs 现实的复杂环境；</li><li>发论文要求的高精度 vs 量产时需要的低成本；</li><li>有限的、格式统一的公开数据集 vs 丰富的未经处理的原始数据。</li><li>难得的是把需求链路打通，而不只是提高一点点精度。</li></ul>]]></content>
+        <content type="html"><![CDATA[<p>关注了朱松纯教授之后，找到一些他和他的研究生的相关文章，记录一些 enlightening words。</p><p>a. 一个脑模型就是世界观、人生观、价值观的一个数学的表达。</p><p>b. 苏轼的一生波澜起伏，他的思想境界也在高维空间的“大平衡” 和降维空间的“小平衡”中反复变换。实际上，每个人的人生都是如此，需要在社会规范和个人价值追求的冲突与统一中反复调节，找到内心的平衡点。</p><p>c. 现有的数据驱动的人工智能是大数据小范式。</p><p>d. 机器学习这个过程没有因果，没有机器人行动，是纯粹的、被动的统计学习。目前那些做视觉识别和语音识别都是这一类。其实真正的学习是一个交互的过程。</p><p>e. 我以前也谈到过一个“路灯的隐喻”，科学研究就像在一个漆黑的夜晚找钥匙，大家喜欢聚在路灯底下找，但是很可能钥匙不在那个灯底下。</p><p>ref:</p><ul><li>朱松纯：浅谈人工智能 - <a href="https://mp.weixin.qq.com/s/KhiHAGFjCUYqq5fdYBBlDA">https://mp.weixin.qq.com/s/KhiHAGFjCUYqq5fdYBBlDA</a></li><li>致学弟学妹——优秀学长代表范丽凤学姐 - <a href="https://mp.weixin.qq.com/s/3zeBP%E2%80%93Z0xcQEalccGm2iw">https://mp.weixin.qq.com/s/3zeBP–Z0xcQEalccGm2iw</a></li></ul>]]></content>
       
       
       
