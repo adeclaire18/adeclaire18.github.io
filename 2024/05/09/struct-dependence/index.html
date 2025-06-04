@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="renderer" content="webkit">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>
+        Bohan Wang
+    </title>
+    
+<link rel="stylesheet" href="/libs/highlight/styles/monokai-sublime.css">
+
+    
+<link rel="stylesheet" href="/libs/font-awesome/css/font-awesome.min.css">
+
+    
+<link rel="stylesheet" href="/css/style.css">
+
+<meta name="generator" content="Hexo 7.3.0"></head>
+
+<body id="bodyx">
+    <div class="hd posts">
+    <a href="/index.html"><i class="fa fa-reply replay-btn" aria-hidden="true"></i></a>
+    <div class="post-title">
+        <p>
+            有依赖关系的多个结构体，如何初始化
+        </p>
+        <hr>
+    </div>
+    <div class="post-content">
+        <h3 id="一，问题背景"><a href="#一，问题背景" class="headerlink" title="一，问题背景"></a>一，问题背景</h3><p>在C++编程中，结构体（struct）是一种常用的复合数据类型，用于将不同的数据项组合成一个单一的数据结构。当结构体之间存在继承或其他依赖关系时，如何正确地声明和定义它们变得尤为重要。如果处理不当，可能会导致编译错误，如多重定义或未定义引用。</p>
+<h3 id="二，知识点"><a href="#二，知识点" class="headerlink" title="二，知识点"></a>二，知识点</h3><h4 id="1-依赖关系"><a href="#1-依赖关系" class="headerlink" title="1. 依赖关系"></a>1. 依赖关系</h4><p>识别并确认结构体之间的依赖关系是解决问题的第一步。例如，结构体B继承自结构体A，或者结构体B包含结构体A的实例。</p>
+<h4 id="2-声明与定义的剥离"><a href="#2-声明与定义的剥离" class="headerlink" title="2. 声明与定义的剥离"></a>2. 声明与定义的剥离</h4><p>是指将结构体的声明和定义分开放置在不同的文件中。</p>
+<p>在头文件（.h 文件）中进行结构体的声明，包括结构体的名称、成员变量类型和方法的声明，但不包含具体的实现代码。</p>
+<p>在源文件（.cpp 文件）中进行结构体的定义，包括为结构体分配内存空间、初始化成员变量等具体操作。</p>
+<p>这种剥离的好处在于可以将结构体的实现细节隐藏起来，使得头文件中只包含必要的信息，避免了源文件的修改对整个项目的影响，同时也可以提高编译速度和代码的模块化程度。</p>
+<h4 id="3-前向声明"><a href="#3-前向声明" class="headerlink" title="3. 前向声明"></a>3. 前向声明</h4><p>前向声明是指在使用一个结构体之前，提前声明该结构体的存在和类型，但不包含其完整的定义。前向声明只是告诉编译器这个结构体的名称和类型，但并不提供有关其成员变量和方法的具体信息。</p>
+<p><strong>1）使用场景：</strong></p>
+<p>适用于解决循环依赖的问题，即两个或多个结构体相互依赖的情况。<br>不适用于需要知道完整定义的情况，如创建对象、调用成员函数等。<br>不适用于模板类和函数，因为模板的定义必须在第一次使用前完全可见。</p>
+<p><strong>２）区别：</strong></p>
+<p>前向声明通常用于类和指针，特别是当存在循环依赖时。<br>声明与定义的剥离适用于任何需要分离接口和实现的场合，以提高编译效率。</p>
+<h3 id="三，解决：使用默认构造函数和初始化函数"><a href="#三，解决：使用默认构造函数和初始化函数" class="headerlink" title="三，解决：使用默认构造函数和初始化函数"></a>三，解决：使用默认构造函数和初始化函数</h3><p>举例：从基础到复杂</p>
+<ol>
+<li>最基础的一个结构体：SpecificArea</li>
+</ol>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//  表示一个矩形框的左上角和右下角坐标</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">SpecificArea</span>&#123;</span><br><span class="line">    <span class="type">float</span> xmin;</span><br><span class="line">    <span class="type">float</span> ymin;</span><br><span class="line">    <span class="type">float</span> xmax;</span><br><span class="line">    <span class="type">float</span> ymax;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<ol start="2">
+<li>结构体 A 使用了 SpecificArea，结构体 B 继承自 A 并且添加了一个新属性：</li>
+</ol>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 最基础的配置</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">A</span>&#123;</span><br><span class="line">    SpecificArea rect;</span><br><span class="line">    <span class="type">float</span> conf;</span><br><span class="line">    <span class="type">float</span> iou;</span><br><span class="line">&#125;;</span><br><span class="line"><span class="comment">// 在最基础的配置上添加</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">B</span>:A&#123;</span><br><span class="line">    std::vector&lt;<span class="type">uint16_t</span>&gt; threshold&#123;<span class="number">2</span>&#125;;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<ol start="3">
+<li>这种情况下如何声明一个 B 类型的结构体并将其赋值默认数值? ——添加不同参数的默认构造函数</li>
+</ol>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 定义一个结构体SpecificArea，用于表示矩形区域的左下角和右上角坐标</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">SpecificArea</span> &#123;</span><br><span class="line">    <span class="type">float</span> xmin; <span class="comment">// 矩形区域左下角的x坐标</span></span><br><span class="line">    <span class="type">float</span> ymin; <span class="comment">// 矩形区域左下角的y坐标</span></span><br><span class="line">    <span class="type">float</span> xmax; <span class="comment">// 矩形区域右上角的x坐标</span></span><br><span class="line">    <span class="type">float</span> ymax; <span class="comment">// 矩形区域右上角的y坐标</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">// SpecificArea的默认构造函数，初始化所有坐标为0.0f</span></span><br><span class="line">    <span class="built_in">SpecificArea</span>() : <span class="built_in">xmin</span>(<span class="number">0.0f</span>), <span class="built_in">ymin</span>(<span class="number">0.0f</span>), <span class="built_in">xmax</span>(<span class="number">0.0f</span>), <span class="built_in">ymax</span>(<span class="number">0.0f</span>) &#123;&#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 定义一个结构体A，作为更基础的结构体</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">A</span> &#123;</span><br><span class="line">    SpecificArea rect; <span class="comment">// 表示矩形区域的SpecificArea对象</span></span><br><span class="line">    <span class="type">float</span> conf;       <span class="comment">// 表示置信度的浮点数</span></span><br><span class="line">    <span class="type">float</span> iou;        <span class="comment">// 表示交并比的浮点数</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">// A的默认构造函数，初始化rect为默认构造的SpecificArea对象，conf和iou为0.0f</span></span><br><span class="line">    <span class="built_in">A</span>() : <span class="built_in">rect</span>(), <span class="built_in">conf</span>(<span class="number">0.0f</span>), <span class="built_in">iou</span>(<span class="number">0.0f</span>) &#123;&#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 定义一个结构体B，继承自A，并添加了额外的属性</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">B</span> : A &#123;</span><br><span class="line">    std::vector&lt;<span class="type">uint16_t</span>&gt; thresholds; <span class="comment">// 存储阈值的动态数组，初始化为&#123;2&#125;个元素，均为0</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">// B的默认构造函数，使用A的默认构造函数初始化基类部分，thresholds初始化为&#123;0, 0&#125;</span></span><br><span class="line">    <span class="built_in">B</span>() : <span class="built_in">A</span>(), <span class="built_in">thresholds</span>(&#123;<span class="number">0</span>, <span class="number">0</span>&#125;) &#123;&#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// B的带参数构造函数，接受一个A类型的引用，用以初始化B中的基类部分</span></span><br><span class="line">    <span class="comment">// thresholds同样初始化为&#123;0, 0&#125;</span></span><br><span class="line">    <span class="built_in">B</span>(<span class="type">const</span> A&amp; base) : <span class="built_in">A</span>(base), <span class="built_in">thresholds</span>(&#123;<span class="number">0</span>, <span class="number">0</span>&#125;) &#123;&#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    B temp; <span class="comment">// 创建B类型的临时对象temp</span></span><br><span class="line">    std::cout &lt;&lt; temp.thresholds[<span class="number">0</span>] &lt;&lt; std::endl; <span class="comment">// 输出temp对象中thresholds数组的第一个元素</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="四，补充知识点：拷贝函数"><a href="#四，补充知识点：拷贝函数" class="headerlink" title="四，补充知识点：拷贝函数"></a>四，补充知识点：拷贝函数</h3><h4 id="1-定义-用处："><a href="#1-定义-用处：" class="headerlink" title="1. 定义&#x2F;用处："></a>1. 定义&#x2F;用处：</h4><p>拷贝构造函数是一种特殊的构造函数，用于创建一个新对象，该新对象是通过拷贝一个已经存在的对象来初始化的。在C++中，拷贝构造函数的定义形式通常如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 其中，ClassName 是类的名称，other 是对现有对象的引用。</span></span><br><span class="line"><span class="built_in">ClassName</span>(<span class="type">const</span> ClassName&amp; other);</span><br></pre></td></tr></table></figure>
+
+<p>拷贝构造函数会根据现有对象 other 的值来初始化新对象的成员变量。</p>
+<h4 id="2-使用场景"><a href="#2-使用场景" class="headerlink" title="2. 使用场景"></a>2. 使用场景</h4><p>拷贝构造函数的主要作用是：</p>
+<ol>
+<li>对象初始化：使用一个已有对象初始化一个新对象时。</li>
+</ol>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ClassName obj1;</span><br><span class="line">ClassName obj2 = obj1; <span class="comment">// 调用拷贝构造函数</span></span><br></pre></td></tr></table></figure>
+
+<ol start="2">
+<li>按值传递对象：函数参数按值传递时。</li>
+</ol>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">func</span><span class="params">(ClassName obj)</span></span>; <span class="comment">// 调用拷贝构造函数</span></span><br></pre></td></tr></table></figure>
+
+<ol start="3">
+<li>返回对象：当对象以值返回的方式从函数返回时。</li>
+</ol>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">ClassName <span class="title">func</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    ClassName obj;</span><br><span class="line">    <span class="keyword">return</span> obj; <span class="comment">// 调用拷贝构造函数</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+<h4 id="3-默认拷贝构造函数-自动生成的拷贝构造函数"><a href="#3-默认拷贝构造函数-自动生成的拷贝构造函数" class="headerlink" title="3. 默认拷贝构造函数&#x2F;自动生成的拷贝构造函数"></a>3. 默认拷贝构造函数&#x2F;自动生成的拷贝构造函数</h4><p>如果一个类没有显式定义拷贝构造函数，编译器会自动生成一个默认的拷贝构造函数。这个默认的拷贝构造函数会逐个成员地进行浅拷贝，即按成员的类型逐个拷贝成员变量的值。</p>
+<h4 id="4-深拷贝-自定义拷贝构造函数"><a href="#4-深拷贝-自定义拷贝构造函数" class="headerlink" title="4. 深拷贝&#x2F;自定义拷贝构造函数"></a>4. 深拷贝&#x2F;自定义拷贝构造函数</h4><p>如果类中有指针成员，使用默认的浅拷贝可能会导致多个对象共享相同的内存地址，进而产生资源管理问题（如重复释放内存）。此时，需要用户定义一个深拷贝构造函数，以确保每个对象都有自己的内存副本。</p>
+<p>拷贝构造函数是一个用于拷贝现有对象的特殊构造函数。它在创建新对象时，通过拷贝现有对象的成员变量值来初始化新对象。如果类包含复杂成员（如指针），需要深拷贝时，就需要自定义拷贝构造函数。</p>
+<p>实现拷贝构造函数时应注意：</p>
+<ol>
+<li>确保正确分配新内存并复制值。</li>
+<li>处理自我赋值的情况（虽然一般在赋值运算符中更常见，但在某些复杂情境下也可能在拷贝构造函数中需要处理）。</li>
+<li>释放资源时避免内存泄漏。</li>
+</ol>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="keyword">using</span> <span class="keyword">namespace</span> std;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Example</span> &#123;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    <span class="type">int</span>* data;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="comment">// 构造函数</span></span><br><span class="line">    <span class="built_in">Example</span>(<span class="type">int</span> value) &#123;</span><br><span class="line">        data = <span class="keyword">new</span> <span class="built_in">int</span>(value);</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;Constructor called&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 拷贝构造函数</span></span><br><span class="line">    <span class="built_in">Example</span>(<span class="type">const</span> Example &amp;obj) &#123;</span><br><span class="line">        data = <span class="keyword">new</span> <span class="built_in">int</span>(*(obj.data));</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;Copy Constructor called&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 析构函数</span></span><br><span class="line">    ~<span class="built_in">Example</span>() &#123;</span><br><span class="line">        <span class="keyword">delete</span> data;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;Destructor called&quot;</span> &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 显示数据</span></span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">display</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">        cout &lt;&lt; <span class="string">&quot;Value: &quot;</span> &lt;&lt; *data &lt;&lt; endl;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="function">Example <span class="title">obj1</span><span class="params">(<span class="number">10</span>)</span></span>;    <span class="comment">// 调用构造函数</span></span><br><span class="line">    Example obj2 = obj1; <span class="comment">// 调用拷贝构造函数</span></span><br><span class="line"></span><br><span class="line">    obj<span class="number">1.</span><span class="built_in">display</span>();</span><br><span class="line">    obj<span class="number">2.</span><span class="built_in">display</span>();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在上面的例子中，obj2 是通过拷贝 obj1 创建的，因此调用了拷贝构造函数，并且为 data 成员分配了新的内存。</p>
+<p>拷贝构造函数在管理动态内存时尤为重要，通过正确实现深拷贝，确保对象间的独立性，从而避免潜在的内存管理问题。</p>
+
+    </div>
+
+    
+</div>
+    <div class="footer" id="footer">
+    <p>Copyright © 2020 <a class="flink" target="_blank" rel="noopener" href="https://hexo.io">Hexo</a>-<a class="flink" target="_blank" rel="noopener" href="https://github.com/sanjinhub/hexo-theme-geek">Geek</a>.
+        <label class="el-switch el-switch-green el-switch-sm" style="vertical-align: sub;">
+            <input type="checkbox" name="switch" id="update_style">
+            <span class="el-switch-style"></span>
+        </label>
+<!--         <script type="text/javascript">
+        var cnzz_protocol = (("https:" == document.location.protocol) ? "https://" : "http://");
+        document.write(unescape("%3Cspan id='cnzz_stat_icon_1278548644'%3E%3C/span%3E%3Cscript src='" + cnzz_protocol + "v1.cnzz.com/stat.php%3Fid%3D1278548644%26show%3Dpic1' type='text/javascript'%3E%3C/script%3E"));
+        </script> -->
+    </p>
+</div>
+<input type="hidden" id="web_style" value="black">
+<input type="hidden" id="valine_appid" value="CmCti21ooOOIzFOhEyFkFvR0-gzGzoHsz">
+<input type="hidden" id="valine_appKey" value="FqiyUqbg7McKN2eG0MCewupf">
+
+<script src="/libs/jquery.min.js"></script>
+
+
+<script src="/libs/highlight/highlight.pack.js"></script>
+
+<script src='//cdn.jsdelivr.net/npm/valine@1.3.10/dist/Valine.min.js'></script>
+
+<script src="/js/js.js"></script>
+
+<style type="text/css">
+.v * {
+    color: #698fca;
+}
+
+.v .vlist .vcard .vhead .vsys {
+    color: #3a3e4a;
+}
+
+.v .vlist .vcard .vh .vmeta .vat {
+    color: #638fd5;
+}
+
+.v .vlist .vcard .vhead .vnick {
+    color: #6ba1ff;
+}
+
+.v a {
+    color: #8696b1;
+}
+
+.v .vlist .vcard .vhead .vnick:hover {
+    color: #669bfc;
+}
+</style>
+</body>
+
+</html>
